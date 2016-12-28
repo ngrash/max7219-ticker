@@ -1,8 +1,17 @@
 #include "LedControl.h"
 #include <avr/pgmspace.h>
 
-#define PADDING 9
+#define PADDING             9
 #define MSG_BUFFER_LENGTH 256
+#define FRAME_DELAY        50
+
+#define BAUD_RATE      9600
+#define SERIAL_TIMEOUT 1000
+
+#define DATA_PIN    12
+#define CLOCK_PIN   11
+#define SELECT_PIN  10
+#define NUM_DEVICES  1
 
 const byte font[][6] PROGMEM = {
   {1, 0x00},                         // (space)
@@ -101,21 +110,21 @@ const byte font[][6] PROGMEM = {
   {3, 0x82, 0x6c, 0x10},             // }
 };
 
-LedControl lc = LedControl(12, 11, 10, 1);
+LedControl lc = LedControl(DATA_PIN, CLOCK_PIN, SELECT_PIN, NUM_DEVICES);
 
 void setup() {
   lc.shutdown(0, false);
   lc.setIntensity(0, 1);
   lc.clearDisplay(0);
 
-  Serial.begin(9600);
-  Serial.setTimeout(1000);
+  Serial.begin(BAUD_RATE);
+  Serial.setTimeout(SERIAL_TIMEOUT);
 }
 
 void loop() {
   /*char msg[MSG_BUFFER_LENGTH];
   readMsg(msg, MSG_BUFFER_LENGTH);*/
-  char* msg = "The quick brown fox jumps over the lazy dog.";
+  char* msg = "works for me";
   scrollMessage(msg);
 }
 
@@ -124,30 +133,67 @@ void readMsg(char* buffer, int length) {
   buffer[bytesRead] = '\0';
 }
 
-int messageColWidth(const char* message) {
-  int width = 0;
-  char ch;
-  for(int i = 0; (ch = message[i]) != 0; i++) {
-    width += getCharWidth(ch);
-    width += 1; // one blank col after each char
-  }
-  return width;
-}
-
-void scrollMessage(char* message) {
-  int bufferSize = messageColWidth(message) + PADDING*2;
+void scrollMessage(char* msg) {
+  int bufferSize = calculateColumnCount(msg) + PADDING*2;
   byte* buffer = (byte*)malloc(bufferSize);
-  getColumns(message, buffer);
+  fillColumnsBuffer(msg, buffer);
 
   drawFrames(buffer, bufferSize);
 
   free(buffer);
 }
 
+int calculateColumnCount(const char* msg) {
+  int count = 0;
+  char ch;
+  for(int i = 0; (ch = msg[i]) != 0; i++) {
+    int index = getCharIndex(ch);
+    count += getCharColumnCount(index);
+    count += 1; // one blank col after each char
+  }
+
+  return count;
+}
+
+void fillColumnsBuffer(char* message, byte* buffer) {
+  for(int i = 0; i < PADDING; i++) {
+    buffer[i] = 0;
+  }
+
+  int totalColumnIdx = PADDING;
+  while(*message) {
+    char ch = *message++;
+    int index = getCharIndex(ch);
+    int columnCount = getCharColumnCount(index);
+
+    for(int columnIdx = 0; columnIdx < columnCount; columnIdx++) {
+      buffer[totalColumnIdx++] = getCharColumnData(index, columnIdx);
+    }
+
+    buffer[totalColumnIdx++] = '\0';
+  }
+
+  for(int i = 0; i < PADDING; i++) {
+    buffer[totalColumnIdx+i] = 0;
+  }
+}
+
+int getCharIndex(char ch) {
+  return (int)(ch - 32);
+}
+
+int getCharColumnCount(int position) {
+  return pgm_read_byte(&(font[position][0]));
+}
+
+byte getCharColumnData(int position, int columnIdx) {
+  return pgm_read_byte(&(font[position][1+columnIdx]));
+}
+
 void drawFrames(byte* buffer, int bufferSize) {
   for(int i = 0; i < bufferSize-8; i++) {
     drawFrame(i, buffer, bufferSize);
-    delay(50);
+    delay(FRAME_DELAY);
   }
 }
 
@@ -156,37 +202,4 @@ void drawFrame(int frame, byte* buffer, int bufferSize) {
     byte col = buffer[frame + i];
     lc.setColumn(0, i, col);
   }
-}
-
-void getColumns(char* message, byte* buffer) {
-  for(int i = 0; i < PADDING; i++) {
-    buffer[i] = 0;
-  }
-
-  int colIdx = PADDING;
-  while(*message) {
-    char ch = *message++;
-    int pos = getCharPos(ch);
-    int width = getCharWidth(ch);
-    for(int i = 0; i < width; i++) {
-      buffer[colIdx++] = getCharCol(pos, i);
-    }
-    buffer[colIdx++] = '\0';
-  }
-
-  for(int i = 0; i < PADDING; i++) {
-    buffer[colIdx+i] = 0;
-  }
-}
-
-int getCharPos(char ch) {
-  return (int)(ch - 32);
-}
-
-int getCharWidth(char ch) {
-  return pgm_read_byte(&(font[(int)(ch-32)][0]));
-}
-
-byte getCharCol(int pos, int col) {
-  return pgm_read_byte(&(font[pos][1+col]));
 }
