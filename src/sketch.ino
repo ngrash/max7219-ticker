@@ -111,6 +111,8 @@ const byte font[][6] PROGMEM = {
 };
 
 LedControl lc = LedControl(DATA_PIN, CLOCK_PIN, SELECT_PIN, NUM_DEVICES);
+byte* columnsBuffer;
+int columnsBufferSize;
 
 void setup() {
   lc.shutdown(0, false);
@@ -119,13 +121,12 @@ void setup() {
 
   Serial.begin(BAUD_RATE);
   Serial.setTimeout(SERIAL_TIMEOUT);
+
+  buildColumnsBuffer("works for me");
 }
 
 void loop() {
-  /*char msg[MSG_BUFFER_LENGTH];
-  readMsg(msg, MSG_BUFFER_LENGTH);*/
-  char* msg = "works for me";
-  scrollMessage(msg);
+  drawFrames(columnsBuffer, columnsBufferSize);
 }
 
 void readMsg(char* buffer, int length) {
@@ -133,14 +134,20 @@ void readMsg(char* buffer, int length) {
   buffer[bytesRead] = '\0';
 }
 
-void scrollMessage(char* msg) {
-  int bufferSize = calculateColumnCount(msg) + PADDING*2;
-  byte* buffer = (byte*)malloc(bufferSize);
-  fillColumnsBuffer(msg, buffer);
+void buildColumnsBuffer(char* msg) {
+  destroyColumnsBuffer();
 
-  drawFrames(buffer, bufferSize);
+  columnsBufferSize = calculateColumnCount(msg) + PADDING*2;
+  columnsBuffer = (byte*)malloc(columnsBufferSize);
+  fillColumnsBuffer(msg, columnsBuffer);
+}
 
-  free(buffer);
+void destroyColumnsBuffer() {
+  if(columnsBuffer == 0) {
+    free(columnsBuffer);
+    columnsBuffer = 0;
+    columnsBufferSize = 0;
+  }
 }
 
 int calculateColumnCount(const char* msg) {
