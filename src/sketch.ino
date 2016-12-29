@@ -113,6 +113,7 @@ const byte font[][6] PROGMEM = {
 LedControl lc = LedControl(DATA_PIN, CLOCK_PIN, SELECT_PIN, NUM_DEVICES);
 byte* columnsBuffer;
 int columnsBufferSize;
+char messageBuffer[MSG_BUFFER_LENGTH];
 
 void setup() {
   lc.shutdown(0, false);
@@ -126,7 +127,25 @@ void setup() {
 }
 
 void loop() {
+  brotocol();
   drawFrames(columnsBuffer, columnsBufferSize);
+}
+
+void brotocol() {
+  if(Serial.available() > 0) {
+    char hello[3];
+    byte bytesRead = Serial.readBytes(hello, 2);
+    hello[2] = '\0';
+
+    if(strcmp(hello, "hi") == 0) {
+      Serial.println("sup?");
+      buildColumnsBuffer("...");
+      while(!Serial.available()) { drawFrames(columnsBuffer, columnsBufferSize); }
+
+      readMsg(messageBuffer, MSG_BUFFER_LENGTH);
+      buildColumnsBuffer(messageBuffer);
+    }
+  }
 }
 
 void readMsg(char* buffer, int length) {
